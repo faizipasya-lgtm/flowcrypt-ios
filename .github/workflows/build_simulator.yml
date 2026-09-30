@@ -16,6 +16,9 @@ jobs:
           git fetch upstream master --tags --depth=5000
           git checkout 2323e740318b96e69c507659d58a072d786b20ed
           grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
+          # project format 100 ditolak Xcode 26.3 ("future format") -> turunkan ke 77 (kompatibel)
+          sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
+          grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
 
       - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
         run: |
