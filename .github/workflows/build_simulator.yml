@@ -12,7 +12,7 @@ jobs:
 
       - name: Pin commit yang di-report (MARKETING_VERSION 1.3.4)
         run: |
-          git fetch --all --tags --unshallow || git fetch --all --tags
+          git fetch --all --tags
           git checkout 2323e740318b96e69c507659d58a072d786b20ed
           grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
 
@@ -23,6 +23,14 @@ jobs:
           else
             echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
           fi
+
+      - name: Select newest Xcode (project format 100 needs Xcode 26)
+        run: |
+          ls /Applications | grep -i xcode || true
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
 
       - name: Build for simulator (no code signing)
         run: |
