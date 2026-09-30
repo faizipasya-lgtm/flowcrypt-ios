@@ -36,6 +36,11 @@ jobs:
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
 
+      - name: Force HTTPS for git@github.com submodules (runner has no SSH keys)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global --add safe.directory '*'
+
       - name: Build for simulator (no code signing)
         run: |
           xcodebuild -project FlowCrypt.xcodeproj \
