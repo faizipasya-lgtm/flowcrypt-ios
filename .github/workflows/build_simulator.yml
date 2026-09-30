@@ -41,7 +41,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global --add safe.directory '*'
 
-      - name: Build for simulator (no code signing)
+      - name: Build for simulator (ad-hoc signed so keychain entitlements are embedded)
         run: |
           xcodebuild -project FlowCrypt.xcodeproj \
             -scheme "Debug FlowCrypt" \
@@ -51,7 +51,8 @@ jobs:
             -derivedDataPath build \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tail -25
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS=FlowCrypt/FlowCrypt.entitlements build | tail -25
 
       - name: Zip .app for Appetize
         run: |
