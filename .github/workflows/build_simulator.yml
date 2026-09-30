@@ -12,7 +12,8 @@ jobs:
 
       - name: Pin commit yang di-report (MARKETING_VERSION 1.3.4)
         run: |
-          git fetch --all --tags
+          git remote add upstream https://github.com/FlowCrypt/flowcrypt-ios.git || true
+          git fetch upstream master --tags --depth=5000
           git checkout 2323e740318b96e69c507659d58a072d786b20ed
           grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
 
