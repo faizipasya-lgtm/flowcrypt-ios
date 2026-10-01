@@ -1,0 +1,24 @@
+name: diag-xcode-runtimes
+on:
+  workflow_dispatch: {}
+jobs:
+  diag:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: List Xcodes
+        run: ls -d /Applications/Xcode*.app 2>/dev/null; echo "---default---"; xcodebuild -version
+      - name: List installed iOS runtimes
+        run: xcrun simctl list runtimes
+      - name: List downloadable iOS platforms (Xcode 16 style)
+        run: |
+          xcodebuild -downloadAllPlatforms -exportPath /tmp/x 2>/dev/null | head -5 || true
+          echo "--- try list via xcrun simctl runtime ---"
+          xcrun simctl runtime list 2>/dev/null || echo "no runtime subcmd"
+      - name: Each Xcode SDK versions
+        run: |
+          for x in /Applications/Xcode*.app; do
+            echo "=== $x ==="
+            DEVELOPER_DIR="$x/Contents/Developer" xcodebuild -version 2>/dev/null
+            DEVELOPER_DIR="$x/Contents/Developer" xcodebuild -showsdks 2>/dev/null | grep -i ios || true
+          done
