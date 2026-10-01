@@ -37,6 +37,10 @@ config.capabilities = [
           'appium:showXcodeLog': true,
         }
       : {}),
+    // app (splash + animasi) tidak pernah "idle" dalam 10s default -> jangan tunggu idle
+    'appium:waitForIdleTimeout': 0,
+    'appium:launchTimeout': 600000,
+    'appium:forceAppLaunch': true,
     'appium:reduceMotion': true,
   } as any,
 ];
