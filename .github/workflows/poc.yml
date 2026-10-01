@@ -118,20 +118,34 @@ jobs:
           npx appium driver list --installed
           ls -la "$APPIUM_HOME" 2>/dev/null || true
 
-      - name: Prebuild WebDriverAgent (ad-hoc signed) - fix xcodebuild exit 65
+      - name: Prebuild WebDriverAgent (fix Xcode 26 lib_TestingInterop copy issue)
         run: |
           WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
           ls "$WDA_DIR/WebDriverAgent.xcodeproj"
+          # Xcode 26.3 bug: lib_TestingInterop.dylib hilang dari SDK -> patch WDA project
+          # supaya CopyFiles fase-nya gak copy dylib yang gak ada (status quo known issue).
+          SDK_LIB="/Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/lib_TestingInterop.dylib"
+          if [ ! -f "$SDK_LIB" ]; then
+            echo "SDK lib hilang (known Xcode 26.3 issue): $SDK_LIB"
+            # Cari dylib di lokasi lain (Xcode 26.3 pindah path):
+            FOUND=$(find /Applications/Xcode_26.3.app/Contents/Developer -name "lib_TestingInterop.dylib" 2>/dev/null | head -1)
+            echo "found: $FOUND"
+            if [ -n "$FOUND" ]; then
+              # patch: buat symlink di path yang diharapkan project
+              mkdir -p "$(dirname "$SDK_LIB")" 2>/dev/null || sudo mkdir -p "$(dirname "$SDK_LIB")"
+              sudo ln -sf "$FOUND" "$SDK_LIB" 2>/dev/null || ln -sf "$FOUND" "$SDK_LIB" 2>/dev/null || true
+              ls -la "$SDK_LIB" || true
+            fi
+          fi
           xcodebuild build-for-testing \
             -project "$WDA_DIR/WebDriverAgent.xcodeproj" \
             -scheme WebDriverAgentRunner \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "id=$SIM_UDID" \
             -derivedDataPath /tmp/wda-prebuilt \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO \
-            DEVELOPMENT_TEAM="" 2>&1 | tail -8
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=NO 2>&1 | tail -8
           ls /tmp/wda-prebuilt/Build/Products
-          /usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" /tmp/wda-prebuilt/Build/Products/*/WebDriverAgentRunner-Runner.app/Info.plist
+          test -d /tmp/wda-prebuilt/Build/Products/Debug-iphonesimulator
           echo "WDA_PREBUILT_ROOT=/tmp/wda-prebuilt" >> "$GITHUB_ENV"
 
       # ================= FINDING 1 =================
