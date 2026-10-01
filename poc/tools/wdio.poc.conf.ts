@@ -1,0 +1,32 @@
+import { join } from 'path';
+import { config } from './wdio.shared.conf';
+
+// POC config v2: UDID eksplisit via POC_DEVICE_UDID (hindari parsing platformVersion),
+// spec dari folder poc, app path dari env APP_PATH.
+config.suites = {
+  poc: ['./tests/specs/mock/poc/*.spec.ts'],
+};
+
+config.capabilities = [
+  {
+    platformName: 'iOS',
+    maxInstances: 1,
+    hostname: '127.0.0.1',
+    'appium:automationName': 'XCUITest',
+    'appium:processArguments': {
+      args: ['--mock-fes-api', '--mock-attester-api', '--mock-gmail-api'],
+    },
+    'appium:locale': 'en_US',
+    'appium:deviceName': process.env.POC_DEVICE_NAME || 'iPhone 16',
+    ...(process.env.POC_DEVICE_UDID ? { 'appium:udid': process.env.POC_DEVICE_UDID } : {}),
+    'appium:orientation': 'PORTRAIT',
+    'appium:app': process.env.APP_PATH || join(process.cwd(), './FlowCrypt.app'),
+    'appium:simulatorStartupTimeout': 600000,
+    'appium:wdaLaunchTimeout': 600000,
+    'appium:wdaConnectionTimeout': 600000,
+    'appium:wdaStartupRetryInterval': 120000,
+    'appium:reduceMotion': true,
+  } as any,
+];
+
+exports.config = config;
