@@ -1,0 +1,95 @@
+name: PoC iOS Simulator recording
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simulator-poc:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build JS core
+        working-directory: Core
+        run: |
+          npm ci
+          npm run build
+
+      - name: Select Xcode
+        run: |
+          ls /Applications | grep Xcode || true
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Build FlowCrypt.app (Debug FlowCrypt, iPhone Simulator)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project FlowCrypt.xcodeproj \
+            -scheme "Debug FlowCrypt" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/dd \
+            -skipPackagePluginValidation -skipMacroValidation \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            | tail -40
+          find /tmp/dd/Build/Products -maxdepth 2 -name "*.app" || true
+
+      - name: Boot iPhone Simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes | tail -5
+          RUNTIME=$(xcrun simctl list runtimes | grep -oE 'iOS [0-9.]+' | tail -1 | awk '{print $2}')
+          echo "runtime: $RUNTIME"
+          xcrun simctl create PoCiPhone "com.apple.CoreSimulator.SimDeviceType.iPhone-16" "com.apple.CoreSimulator.SimRuntime.iOS-${RUNTIME//./-}" || true
+          xcrun simctl boot PoCiPhone || true
+          xcrun simctl bootstatus PoCiPhone -b
+
+      - name: Install app + start recording
+        run: |
+          set -euo pipefail
+          APP=$(find /tmp/dd/Build/Products -maxdepth 2 -name "FlowCrypt.app" | head -1)
+          echo "APP=$APP"
+          xcrun simctl install PoCiPhone "$APP"
+          mkdir -p /tmp/rec
+          xcrun simctl io PoCiPhone recordVideo --codec h264 --force /tmp/rec/poc.mp4 &
+          echo $! > /tmp/rec/pid
+
+      - name: Run PoC spec (mock server + app UI flow)
+        working-directory: appium
+        run: |
+          set -euo pipefail
+          APP=$(find /tmp/dd/Build/Products -maxdepth 2 -name "FlowCrypt.app" | head -1)
+          cp -R "$APP" ./FlowCrypt.app
+          npm ci
+          npx wdio ./config/wdio.mock.conf.ts --suite inbox --jasmineOpts.grep "attacker attachment link host" 2>&1 | tee /tmp/rec/wdio.log || true
+          echo "===== MOCK SERVER LOG (attacker host requests) ====="
+          grep -E "GET /poc-fetch|POST /poc-fetch" /tmp/rec/wdio.log || echo "(not captured in grep; check full log)"
+
+      - name: Stop recording + collect artifacts
+        if: always()
+        run: |
+          kill -INT $(cat /tmp/rec/pid) 2>/dev/null || true
+          sleep 3
+          ls -la /tmp/rec || true
+          mkdir -p artifacts
+          cp /tmp/rec/poc.mp4 artifacts/ 2>/dev/null || true
+          cp /tmp/rec/wdio.log artifacts/ 2>/dev/null || true
+          xcrun simctl io PoCiPhone screenshot artifacts/final.png 2>/dev/null || true
+
+      - name: Upload recording + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-poc
+          path: artifacts/
+          if-no-files-found: error

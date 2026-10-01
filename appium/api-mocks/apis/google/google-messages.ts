@@ -36,4 +36,5 @@ export type GoogleMockMessage =
   | 'Canary Mail PGP encrypted emails cannot be read by Flowcrypt recipient'
   | 'plain message quote rendering'
   | 'Test public key attachment for encrypted message'
-  | 'Test public key attachment for inline public key';
+  | 'Test public key attachment for inline public key'
+  | 'PoC attachment link with arbitrary host';
