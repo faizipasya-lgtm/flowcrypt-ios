@@ -143,6 +143,20 @@ jobs:
           mkdir -p appium/tests/specs/mock/poc
           cp poc/specs/poc_attachment_v2.ts appium/tests/specs/mock/poc/poc_attachment.spec.ts
 
+      - name: Patch mock.ts - install cert ke SYSTEM root store (iOS 26 Safari strict)
+        run: |
+          python3 - <<'PYEOF'
+          import re
+          p = "appium/api-mocks/mock.ts"
+          s = open(p).read()
+          old = "await driver.execute('mobile: installCertificate', { content: base64 });"
+          new = "await driver.execute('mobile: installCertificate', { content: base64, isRootCertificate: true, inRootStore: true });"
+          assert old in s, "target line not found"
+          s = s.replace(old, new)
+          open(p,"w").write(s)
+          print("mock.ts patched: inRootStore=true")
+          PYEOF
+
       - name: Install Appium XCUITest driver
         working-directory: appium
         env:
