@@ -118,7 +118,7 @@ jobs:
           npx appium driver list --installed
           ls -la "$APPIUM_HOME" 2>/dev/null || true
 
-      - name: Prebuild WebDriverAgent (no signing) - fix xcodebuild exit 65
+      - name: Prebuild WebDriverAgent (ad-hoc signed) - fix xcodebuild exit 65
         run: |
           WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
           ls "$WDA_DIR/WebDriverAgent.xcodeproj"
@@ -128,9 +128,10 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath /tmp/wda-prebuilt \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES 2>&1 | tail -8
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" 2>&1 | tail -8
           ls /tmp/wda-prebuilt/Build/Products
+          /usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" /tmp/wda-prebuilt/Build/Products/*/WebDriverAgentRunner-Runner.app/Info.plist
           echo "WDA_PREBUILT_ROOT=/tmp/wda-prebuilt" >> "$GITHUB_ENV"
 
       # ================= FINDING 1 =================
