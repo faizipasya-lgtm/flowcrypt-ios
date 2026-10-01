@@ -123,7 +123,7 @@ jobs:
         run: |
           cp poc/tools/wdio.poc.conf.ts appium/config/wdio.poc.conf.ts
           mkdir -p appium/tests/specs/mock/poc
-          cp poc/specs/poc_attachment.spec.ts appium/tests/specs/mock/poc/
+          cp poc/specs/poc_attachment_v2.ts appium/tests/specs/mock/poc/poc_attachment.spec.ts
 
       - name: Install Appium XCUITest driver
         working-directory: appium
@@ -167,8 +167,6 @@ jobs:
 
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"
         working-directory: appium
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           set -x
           xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f1.mov &
@@ -186,8 +184,6 @@ jobs:
       - name: "Finding 2: rekam - dos-hang (UI hang)"
         working-directory: appium
         continue-on-error: true
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           set -x
           xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f2.mov &
