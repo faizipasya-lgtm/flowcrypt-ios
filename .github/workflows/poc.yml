@@ -120,26 +120,24 @@ jobs:
           npx appium driver list --installed
           ls -la "$APPIUM_HOME" 2>/dev/null || true
 
-      - name: Prebuild WebDriverAgent (fix Xcode 26 lib_TestingInterop copy issue)
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Prebuild WebDriverAgent (Xcode 26.3 + stub lib_TestingInterop fallback)
         run: |
           WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
           ls "$WDA_DIR/WebDriverAgent.xcodeproj"
-          # Xcode 26.3 bug: lib_TestingInterop.dylib hilang dari SDK -> patch WDA project
-          # supaya CopyFiles fase-nya gak copy dylib yang gak ada (status quo known issue).
           SDK_LIB="/Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/lib_TestingInterop.dylib"
           if [ ! -f "$SDK_LIB" ]; then
-            echo "SDK lib hilang (known Xcode 26.3 issue): $SDK_LIB"
-            # Cari dylib di lokasi lain (Xcode 26.3 pindah path):
-            FOUND=$(find /Applications/Xcode_26.3.app/Contents/Developer -name "lib_TestingInterop.dylib" 2>/dev/null | head -1)
-            echo "found: $FOUND"
+            sudo mkdir -p "$(dirname "$SDK_LIB")"
+            FOUND=$(find /Applications/Xcode_26.3.app -name "lib_TestingInterop.dylib" 2>/dev/null | head -1 || true)
             if [ -n "$FOUND" ]; then
-              # patch: buat symlink di path yang diharapkan project
-              mkdir -p "$(dirname "$SDK_LIB")" 2>/dev/null || sudo mkdir -p "$(dirname "$SDK_LIB")"
-              sudo ln -sf "$FOUND" "$SDK_LIB" 2>/dev/null || ln -sf "$FOUND" "$SDK_LIB" 2>/dev/null || true
-              ls -la "$SDK_LIB" || true
+              echo "symlink dari: $FOUND"
+              sudo ln -sf "$FOUND" "$SDK_LIB"
+            else
+              echo "dylib tidak ada di toolchain -> buat stub dylib"
+              echo "int _stub = 0;" > /tmp/stub.c
+              clang -dynamiclib -o /tmp/lib_TestingInterop.dylib /tmp/stub.c
+              sudo cp /tmp/lib_TestingInterop.dylib "$SDK_LIB"
             fi
+            ls -la "$SDK_LIB"
           fi
           xcodebuild build-for-testing \
             -project "$WDA_DIR/WebDriverAgent.xcodeproj" \
@@ -152,7 +150,6 @@ jobs:
           test -d /tmp/wda-prebuilt/Build/Products/Debug-iphonesimulator
           echo "WDA_PREBUILT_ROOT=/tmp/wda-prebuilt" >> "$GITHUB_ENV"
 
-      # ================= FINDING 1 =================
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"
         working-directory: appium
         env:
