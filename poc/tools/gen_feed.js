@@ -12,8 +12,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const OPENPGP = path.join(process.cwd(), 'appium', 'node_modules', 'openpgp');
-const EKM_TS = path.join(process.cwd(), 'appium', 'api-mocks', 'apis', 'ekm', 'ekm-endpoints.ts');
+const OPENPGP = path.join(process.cwd(), 'node_modules', 'openpgp');
+const EKM_TS = path.join(process.cwd(), 'api-mocks', 'apis', 'ekm', 'ekm-endpoints.ts');
 
 (async () => {
   const openpgp = require(OPENPGP);
