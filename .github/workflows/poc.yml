@@ -27,10 +27,13 @@ jobs:
           sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
           grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
 
-      - name: Restore poc/ dari ref workflow ini (dihapus oleh checkout pin)
+      - name: Restore poc/ + mock-ssl-cert dari ref workflow ini (dihapus oleh checkout pin)
         run: |
           git checkout "$GITHUB_REF" -- poc/
+          git checkout "$GITHUB_REF" -- appium/api-mocks/mock-ssl-cert/ || true
+          git checkout "$GITHUB_REF" -- appium/api-mocks/mock.ts || true
           ls -la poc/tools poc/specs
+          ls -la appium/api-mocks/mock-ssl-cert/
 
       - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
         run: |
