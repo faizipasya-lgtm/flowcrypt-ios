@@ -99,6 +99,24 @@ jobs:
           echo "BUNDLE_ID=$BID" >> "$GITHUB_ENV"
           echo "installed: $BID"
 
+      - name: Diag - launch manual + device log (bukti app hidup/mati)
+        run: |
+          xcrun simctl launch --console-pty "$SIM_UDID" "$BUNDLE_ID" --mock-fes-api --mock-attester-api --mock-gmail-api > /tmp/app_launch.log 2>&1 &
+          APP_PID=$!
+          sleep 20
+          echo "--- process list (app hidup?) ---"
+          xcrun simctl spawn "$SIM_UDID" launchctl list | grep -i flowcrypt || echo "APP TIDAK ADA di launchctl"
+          echo "--- crash reports ---"
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | tail -5
+          find ~/Library/Logs/DiagnosticReports -name "*FlowCrypt*" -newer /tmp/hit-server.pid 2>/dev/null | head -3
+          echo "--- app_launch.log ---"
+          cat /tmp/app_launch.log || true
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+          mkdir -p demo
+          cp /tmp/app_launch.log demo/app-launch.log 2>/dev/null || true
+          ls ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3 | xargs -I{} cp {} demo/ 2>/dev/null || true
+          echo done-diag
+
       - name: Start attacker host (hit-server, log ke file)
         run: |
           node poc/tools/hit-server.js 8002 > /tmp/hit-server.log 2>&1 &
