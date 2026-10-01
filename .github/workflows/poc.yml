@@ -40,9 +40,9 @@ jobs:
             echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
           fi
 
-      - name: Select Xcode 16.4 (WDA 16.12.11 tidak kompatibel dgn Xcode 26 copy dylib)
+      - name: Select newest Xcode (26.3 - app butuh toolchain ini)
         run: |
-          XCODE_APP=/Applications/Xcode_16.4.app
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
           echo "using $XCODE_APP"
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
@@ -112,6 +112,8 @@ jobs:
 
       - name: Install Appium XCUITest driver
         working-directory: appium
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           npx appium -v
           npx appium driver install xcuitest 2>&1 | tail -3 || true
@@ -119,6 +121,8 @@ jobs:
           ls -la "$APPIUM_HOME" 2>/dev/null || true
 
       - name: Prebuild WebDriverAgent (fix Xcode 26 lib_TestingInterop copy issue)
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
           ls "$WDA_DIR/WebDriverAgent.xcodeproj"
@@ -151,6 +155,8 @@ jobs:
       # ================= FINDING 1 =================
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"
         working-directory: appium
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           set -x
           xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f1.mov &
@@ -168,6 +174,8 @@ jobs:
       - name: "Finding 2: rekam - dos-hang (UI hang)"
         working-directory: appium
         continue-on-error: true
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           set -x
           xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 --force /tmp/demo_f2.mov &
