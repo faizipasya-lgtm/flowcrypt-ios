@@ -22,6 +22,10 @@ config.capabilities = [
     'appium:orientation': 'PORTRAIT',
     'appium:app': process.env.APP_PATH || join(process.cwd(), './FlowCrypt.app'),
     'appium:simulatorStartupTimeout': 600000,
+    // WDA di-compile Appium saat session pertama (5-10 mnt di CI) - client jangan abort duluan
+    connectionRetryTimeout: 1200000,
+    connectionRetryCount: 2,
+    waitforTimeout: 30000,
     'appium:wdaLaunchTimeout': 600000,
     'appium:wdaConnectionTimeout': 600000,
     'appium:wdaStartupRetryInterval': 120000,
