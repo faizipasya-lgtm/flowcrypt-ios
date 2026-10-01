@@ -52,22 +52,6 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global --add safe.directory '*'
 
-      - name: Build for simulator (ad-hoc signed)
-        run: |
-          xcodebuild -project FlowCrypt.xcodeproj \
-            -scheme "Debug FlowCrypt" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGN_ENTITLEMENTS=$PWD/FlowCrypt/FlowCrypt.entitlements build | tail -25
-          APP=$(find build/Build/Products -maxdepth 3 -name "*.app" | head -1)
-          echo "APP_PATH=$PWD/${APP#./}" >> "$GITHUB_ENV"
-          /usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist"
-
       - name: Boot simulator (UDID eksplisit)
         run: |
           UDID=$(xcrun simctl list devices available | grep -m1 -E "iPhone (16|17|15)" | grep -oE "[0-9A-F-]{36}")
@@ -76,6 +60,22 @@ jobs:
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl list devices | grep "$UDID"
+
+      - name: Build for simulator (ad-hoc signed)
+        run: |
+          xcodebuild -project FlowCrypt.xcodeproj \
+            -scheme "Debug FlowCrypt" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS=$PWD/FlowCrypt/FlowCrypt.entitlements build | tail -25
+          APP=$(find build/Build/Products -maxdepth 3 -name "*.app" | head -1)
+          echo "APP_PATH=$PWD/${APP#./}" >> "$GITHUB_ENV"
+          /usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist"
 
       - name: Install app
         run: |
