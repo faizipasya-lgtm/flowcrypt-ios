@@ -1,12 +1,11 @@
 name: flowcrypt-ios-poc-video
 
 # Rekam PoC attachment-URL FlowCrypt iOS di iOS Simulator (GitHub Actions macOS runner).
-# Build app mengikuti build_simulator.yml yang sudah TERBUKTI sukses di repo ini
-# (objectVersion sed + ad-hoc signing + Xcode terbaru).
-# Artifacts:
-#   demo_f1.mov   Finding 1: buka thread -> fetch otomatis ke attacker host publik
-#   demo_f2.mov   Finding 2: dos-hang -> UI hang (Data(contentsOf:) tanpa timeout)
-#   wdio logs + screenshots
+# Build app mengikuti build_simulator.yml yang sudah TERBUKTI sukses di repo ini.
+#
+# CATATAN PENTING: step "Pin commit" melakukan git checkout ke commit upstream
+# (2323e74) yang TIDAK berisi folder poc/. Maka poc/ di-restore eksplisit dari
+# branch master setelah pin (step "Restore poc/ dari master").
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +34,11 @@ jobs:
           grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
           sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
           grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
+
+      - name: Restore poc/ dari master (dihapus oleh checkout pin)
+        run: |
+          git checkout master -- poc/
+          ls -la poc/tools poc/specs
 
       - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
         run: |
