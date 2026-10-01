@@ -100,11 +100,16 @@ const EKM_TS = path.join(process.cwd(), 'api-mocks', 'apis', 'ekm', 'ekm-endpoin
 
   const f1 = await build('F1', `open/FC-F1-${runid}`);
   const f2 = await build('F2', `open/FC-F2-${runid}`);
-  fs.writeFileSync(path.join(outdir, 'message-export-poc-f1.json'), JSON.stringify(f1, null, 1));
-  fs.writeFileSync(path.join(outdir, 'message-export-poc-f2.json'), JSON.stringify(f2, null, 1));
+  const mode = process.argv[5] || 'all';
+  if (mode === 'all' || mode === 'f1') {
+    fs.writeFileSync(path.join(outdir, 'message-export-poc-f1.json'), JSON.stringify(f1, null, 1));
+  }
+  if (mode === 'all' || mode === 'f2') {
+    fs.writeFileSync(path.join(outdir, 'message-export-poc-f2.json'), JSON.stringify(f2, null, 1));
+  }
   fs.writeFileSync(
     path.join(outdir, 'feed-info.json'),
-    JSON.stringify({ runid, base, f1: f1.full.id, f2: f2.full.id }, null, 1),
+    JSON.stringify({ runid, base, mode, f1: f1.full.id, f2: f2.full.id }, null, 1),
   );
   console.log('feeds written: f1 =', f1.full.id, '| f2 =', f2.full.id);
 })().catch(e => {
