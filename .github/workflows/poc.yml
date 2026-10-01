@@ -166,7 +166,7 @@ jobs:
           echo "mock.ts tidak dipatch: mobile:installCertificate original dipertahankan."
           echo "Ini yg bikin SFSafariViewController iOS 26 trust cert mock backend (terbukti run21: splash tanpa TLS warning)."
 
-- name: Install Appium XCUITest driver
+      - name: Install Appium XCUITest driver
         working-directory: appium
         env:
           DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
