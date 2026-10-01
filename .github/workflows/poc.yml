@@ -117,6 +117,17 @@ jobs:
           ls ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3 | xargs -I{} cp {} demo/ 2>/dev/null || true
           echo done-diag
 
+      - name: Trust mock backend cert di SYSTEM store simulator (simctl keychain)
+        run: |
+          # API resmi Apple: masukkan cert mock backend (CN 127.0.0.1:8001) ke SYSTEM
+          # trust store simulator, supaya SFSafariViewController mock-OAuth gak nolak TLS.
+          # Ini CUMA buat mock login backend; host attacker (F1) pakai HTTPS valid publik.
+          CERT=appium/api-mocks/mock-ssl-cert/cert.pem.mock
+          ls -la "$CERT"
+          xcrun simctl keychain "$SIM_UDID" add-root-cert "$CERT" && echo "root cert added to system store" || echo "add-root-cert FAILED"
+          # restart app supaya trust ke-reload
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+
       - name: Start attacker host (hit-server, log ke file)
         run: |
           node poc/tools/hit-server.js 8002 > /tmp/hit-server.log 2>&1 &
