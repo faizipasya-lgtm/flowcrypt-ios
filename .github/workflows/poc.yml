@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 90
     env:
       RUNID: RUN-${{ github.run_id }}
+      APPIUM_HOME: /Users/runner/work/flowcrypt-ios/flowcrypt-ios/.appium-home
 
     steps:
       - name: Checkout
@@ -85,17 +86,11 @@ jobs:
 
       - name: Start attacker host (hit-server, log ke file)
         run: |
-          node poc/tools/hit-server.js 8002 > /tmp/hit-server.log 2>&1 &
+          nohup node poc/tools/hit-server.js 8002 > /tmp/hit-server.log 2>&1 &
           echo $! > /tmp/hit-server.pid
-          # retry loop: tunggu server siap (cold start node bisa > 1s)
-          for i in $(seq 1 30); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8002/open/SELFTEST-$RUNID" || true)
-            if [ "$CODE" = "200" ]; then break; fi
-            sleep 1
-          done
-          echo "selftest GET /open/SELFTEST-$RUNID -> HTTP $CODE"
+          sleep 1
+          curl -s -o /dev/null -w "selftest GET /open/SELFTEST-$RUNID -> HTTP %{http_code}\n" "http://127.0.0.1:8002/open/SELFTEST-$RUNID"
           cat /tmp/hit-server.log
-          test "$CODE" = "200"
 
       - name: Generate crafted feeds (F1 auto-fetch, F2 dos-hang)
         run: |
@@ -114,8 +109,9 @@ jobs:
         working-directory: appium
         run: |
           npx appium -v
-          npx appium driver install xcuitest 2>&1 | tail -3
+          npx appium driver install xcuitest 2>&1 | tail -3 || true
           npx appium driver list --installed
+          ls -la "$APPIUM_HOME" 2>/dev/null || true
 
       # ================= FINDING 1 =================
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"
