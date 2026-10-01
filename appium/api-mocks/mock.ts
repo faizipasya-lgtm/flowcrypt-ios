@@ -9,7 +9,6 @@ import { getMockGoogleEndpoints } from './apis/google/google-endpoints';
 import { getMockEkmEndpoints } from './apis/ekm/ekm-endpoints';
 import { getMockWkdEndpoints } from './apis/wkd/wkd-endpoints';
 import { getMockFesEndpoints } from './apis/fes/fes-endpoints';
-import { getPocRecorderEndpoints } from './apis/poc/poc-endpoints';
 import {
   AttesterConfig,
   EkmConfig,
@@ -101,7 +100,6 @@ export class MockApi {
       'api-mock',
       [
         () => getMockFesEndpoints(this._mockConfig, this._fesConfig),
-        () => getPocRecorderEndpoints(),
         () => getMockAttesterEndpoints(this._mockConfig, this._attesterConfig),
         () => getMockGoogleEndpoints(this._mockConfig, this._googleConfig),
         () => getMockEkmEndpoints(this._mockConfig, this._ekmConfig),

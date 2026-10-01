@@ -1,0 +1,68 @@
+name: Build FlowCrypt iOS simulator app (PoC)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pin commit yang di-report (MARKETING_VERSION 1.3.4)
+        run: |
+          git remote add upstream https://github.com/FlowCrypt/flowcrypt-ios.git || true
+          git fetch upstream master --tags --depth=5000
+          git checkout 2323e740318b96e69c507659d58a072d786b20ed
+          grep -m1 MARKETING_VERSION FlowCrypt.xcodeproj/project.pbxproj
+          # project format 100 ditolak Xcode 26.3 ("future format") -> turunkan ke 77 (kompatibel)
+          sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
+          grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
+
+      - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
+        run: |
+          if grep -q "flowcrypt.s3.amazonaws.com" FlowCrypt/Resources/generated/flowcrypt-ios-prod.js.txt; then
+            echo "FATAL: guard ada di bundle, commit salah"; exit 1
+          else
+            echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
+          fi
+
+      - name: Select newest Xcode (project format 100 needs Xcode 26)
+        run: |
+          ls /Applications | grep -i xcode || true
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Force HTTPS for git@github.com submodules (runner has no SSH keys)
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global --add safe.directory '*'
+
+      - name: Build for simulator (ad-hoc signed so keychain entitlements are embedded)
+        run: |
+          xcodebuild -project FlowCrypt.xcodeproj \
+            -scheme "Debug FlowCrypt" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS=$PWD/FlowCrypt/FlowCrypt.entitlements build | tail -25
+
+      - name: Zip .app for Appetize
+        run: |
+          APP=$(find build/Build/Products -maxdepth 3 -name "*.app" | head -1)
+          echo "app: $APP"
+          cd "$(dirname "$APP")"
+          zip -qr "$GITHUB_WORKSPACE/FlowCrypt-sim.zip" "$(basename "$APP")"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowCrypt-simulator-app
+          path: FlowCrypt-sim.zip
