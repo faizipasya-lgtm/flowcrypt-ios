@@ -147,7 +147,7 @@ jobs:
           npm ci --no-audit --no-fund 2>&1 | tail -3 || npm install --no-audit --no-fund 2>&1 | tail -3
           # F1: attacker host REALISTIS = HTTPS valid publik (cloudflared tunnel, Let's Encrypt).
           # Data(contentsOf:) memvalidasi server trust bawaan - TIDAK ada cert attacker yang ditanam.
-          node ../poc/tools/gen_feed_v2.js "${{ inputs.attacker_url != '' && inputs.attacker_url || 'https://sentence-innovation-tasks-mia.trycloudflare.com' }}" api-mocks/apis/google/exported-messages "$RUNID" f1
+          node ../poc/tools/gen_feed_v2.js "${{ inputs.attacker_url != '' && inputs.attacker_url || 'https://chosen-chart-verde-institutions.trycloudflare.com' }}" api-mocks/apis/google/exported-messages "$RUNID" f1
           # F2: dos-hang deterministik via hit-server lokal (HTTP; TLS tak relevan utk hang)
           node ../poc/tools/gen_feed_v2.js "http://127.0.0.1:8002" api-mocks/apis/google/exported-messages "$RUNID" f2
           ls api-mocks/apis/google/exported-messages/ | grep poc || true
