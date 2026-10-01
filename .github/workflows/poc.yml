@@ -21,6 +21,7 @@ jobs:
     env:
       ATTACKER_URL: ${{ github.event.inputs.attacker_url }}
       RUNID: RUN-${{ github.run_id }}
+      APPIUM_HOME: /home/runner/work/flowcrypt-ios/flowcrypt-ios/.appium
 
     steps:
       - name: Checkout
@@ -114,12 +115,13 @@ jobs:
           mkdir -p appium/tests/specs/mock/poc
           cp poc/specs/poc_attachment.spec.ts appium/tests/specs/mock/poc/
 
-      - name: Install Appium XCUITest driver
+      - name: Install Appium XCUITest driver (shared APPIUM_HOME)
         working-directory: appium
         run: |
+          export APPIUM_HOME="$GITHUB_WORKSPACE/.appium"
+          echo "APPIUM_HOME=$APPIUM_HOME" >> "$GITHUB_ENV"
           npx appium -v
-          npx appium driver list --installed || true
-          npx appium driver install xcuitest 2>&1 | tail -3
+          npx appium driver install xcuitest 2>&1 | tail -3 || true
           npx appium driver list --installed
 
       # ================= FINDING 1 =================
