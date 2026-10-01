@@ -128,8 +128,15 @@ jobs:
           CERT=appium/api-mocks/mock-ssl-cert/ca-cert.pem
           ls -la "$CERT"
           xcrun simctl keychain "$SIM_UDID" add-root-cert "$CERT" && echo "root cert added to system store" || echo "add-root-cert FAILED"
-          # restart app supaya trust ke-reload
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+          # iOS 26: trustd/Safari cache trust saat boot. Cert di-add ke simulator yg sudah
+          # jalan TIDAK ke-reload -> SFSafari tetap "Not Private". Restart simulator supaya
+          # TrustStore ke-load ulang sebelum test.
+          echo "Reboot simulator agar trust store ke-reload..."
+          xcrun simctl shutdown "$SIM_UDID" || true
+          sleep 3
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b || true
+          echo "Simulator rebooted; trust store aktif."
 
       - name: Start attacker host (hit-server, log ke file)
         run: |
