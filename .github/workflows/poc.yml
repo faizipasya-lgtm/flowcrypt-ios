@@ -27,9 +27,9 @@ jobs:
           sed -i '' 's/objectVersion = 100;/objectVersion = 77;/' FlowCrypt.xcodeproj/project.pbxproj
           grep -m1 objectVersion FlowCrypt.xcodeproj/project.pbxproj
 
-      - name: Restore poc/ dari master (dihapus oleh checkout pin)
+      - name: Restore poc/ dari ref workflow ini (dihapus oleh checkout pin)
         run: |
-          git checkout master -- poc/
+          git checkout "$GITHUB_REF" -- poc/
           ls -la poc/tools poc/specs
 
       - name: Verify core bundle prebuilt is the vulnerable one (no host guard)
@@ -117,6 +117,21 @@ jobs:
           npx appium driver install xcuitest 2>&1 | tail -3 || true
           npx appium driver list --installed
           ls -la "$APPIUM_HOME" 2>/dev/null || true
+
+      - name: Prebuild WebDriverAgent (no signing) - fix xcodebuild exit 65
+        run: |
+          WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
+          ls "$WDA_DIR/WebDriverAgent.xcodeproj"
+          xcodebuild build-for-testing \
+            -project "$WDA_DIR/WebDriverAgent.xcodeproj" \
+            -scheme WebDriverAgentRunner \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/wda-prebuilt \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES 2>&1 | tail -8
+          ls /tmp/wda-prebuilt/Build/Products
+          echo "WDA_PREBUILT_ROOT=/tmp/wda-prebuilt" >> "$GITHUB_ENV"
 
       # ================= FINDING 1 =================
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"

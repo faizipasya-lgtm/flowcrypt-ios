@@ -29,6 +29,14 @@ config.capabilities = [
     'appium:wdaLaunchTimeout': 600000,
     'appium:wdaConnectionTimeout': 600000,
     'appium:wdaStartupRetryInterval': 120000,
+    // WDA prebuilt (signing dimatikan di workflow) -> hindari xcodebuild exit 65
+    ...(process.env.WDA_PREBUILT_ROOT
+      ? {
+          'appium:usePrebuiltWDA': true,
+          'appium:derivedDataPath': process.env.WDA_PREBUILT_ROOT,
+          'appium:showXcodeLog': true,
+        }
+      : {}),
     'appium:reduceMotion': true,
   } as any,
 ];
