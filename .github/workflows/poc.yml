@@ -114,6 +114,14 @@ jobs:
           mkdir -p appium/tests/specs/mock/poc
           cp poc/specs/poc_attachment.spec.ts appium/tests/specs/mock/poc/
 
+      - name: Install Appium XCUITest driver
+        working-directory: appium
+        run: |
+          npx appium -v
+          npx appium driver list --installed || true
+          npx appium driver install xcuitest 2>&1 | tail -3
+          npx appium driver list --installed
+
       # ================= FINDING 1 =================
       - name: "Finding 1: rekam - buka thread -> fetch otomatis"
         working-directory: appium
