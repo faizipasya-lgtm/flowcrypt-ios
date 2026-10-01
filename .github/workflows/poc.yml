@@ -40,9 +40,9 @@ jobs:
             echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
           fi
 
-      - name: Select newest Xcode
+      - name: Select Xcode 16.4 (WDA 16.12.11 tidak kompatibel dgn Xcode 26 copy dylib)
         run: |
-          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          XCODE_APP=/Applications/Xcode_16.4.app
           echo "using $XCODE_APP"
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
