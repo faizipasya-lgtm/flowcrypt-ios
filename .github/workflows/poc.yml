@@ -52,14 +52,29 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global --add safe.directory '*'
 
-      - name: Boot simulator (UDID eksplisit)
+      - name: Boot simulator (runtime TERBARU, cocok dgn SDK Xcode 26.3)
         run: |
-          UDID=$(xcrun simctl list devices available | grep -m1 -E "iPhone (16|17|15)" | grep -oE "[0-9A-F-]{36}")
+          # Pilih device dari runtime TERBARU (app dibangun dgn Xcode 26.3; runtime 18.5
+          # tidak bisa menjalankan binary SDK 26 -> app crash saat launch).
+          UDID=$(xcrun simctl list devices available -j | node -e "
+            let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+              const j=JSON.parse(d).devices;
+              let best=null, bestRt='';
+              const rtVer = rt => parseFloat((rt.match(/SimRuntime\.iOS-([0-9-]+)/)||[])[1]?.replace(/-/g,'.')||'0');
+              for (const rt of Object.keys(j)) for (const dev of j[rt])
+                if (dev.isAvailable && /^iPhone/.test(dev.name)) {
+                  const v = rtVer(rt);
+                  if (!best || v > bestRt) { best=dev.udid; bestRt=v; }
+                }
+              console.log(best);
+            });")
+          echo "UDID terpilih: $UDID"
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
           echo "POC_DEVICE_UDID=$UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl list devices | grep "$UDID"
+          xcrun simctl list runtimes | head -8
 
       - name: Build for simulator (ad-hoc signed)
         run: |
