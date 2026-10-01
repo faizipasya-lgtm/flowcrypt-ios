@@ -122,7 +122,7 @@ jobs:
           # API resmi Apple: masukkan cert mock backend (CN 127.0.0.1:8001) ke SYSTEM
           # trust store simulator, supaya SFSafariViewController mock-OAuth gak nolak TLS.
           # Ini CUMA buat mock login backend; host attacker (F1) pakai HTTPS valid publik.
-          CERT=appium/api-mocks/mock-ssl-cert/cert.pem.mock
+          CERT=appium/api-mocks/mock-ssl-cert/ca-cert.pem
           ls -la "$CERT"
           xcrun simctl keychain "$SIM_UDID" add-root-cert "$CERT" && echo "root cert added to system store" || echo "add-root-cert FAILED"
           # restart app supaya trust ke-reload
