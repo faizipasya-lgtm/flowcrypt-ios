@@ -128,15 +128,8 @@ jobs:
           CERT=appium/api-mocks/mock-ssl-cert/ca-cert.pem
           ls -la "$CERT"
           xcrun simctl keychain "$SIM_UDID" add-root-cert "$CERT" && echo "root cert added to system store" || echo "add-root-cert FAILED"
-          # iOS 26: trustd/Safari cache trust saat boot. Cert di-add ke simulator yg sudah
-          # jalan TIDAK ke-reload -> SFSafari tetap "Not Private". Restart simulator supaya
-          # TrustStore ke-load ulang sebelum test.
-          echo "Reboot simulator agar trust store ke-reload..."
-          xcrun simctl shutdown "$SIM_UDID" || true
-          sleep 3
-          xcrun simctl boot "$SIM_UDID" || true
-          xcrun simctl bootstatus "$SIM_UDID" -b || true
-          echo "Simulator rebooted; trust store aktif."
+          # restart app supaya trust ke-reload (installCertificate di spec yg utama)
+          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
 
       - name: Start attacker host (hit-server, log ke file)
         run: |
@@ -168,22 +161,12 @@ jobs:
           mkdir -p appium/tests/specs/mock/poc
           cp poc/specs/poc_attachment_v2.ts appium/tests/specs/mock/poc/poc_attachment.spec.ts
 
-      - name: Patch mock.ts - cabut installCertificate (CA sudah via simctl keychain)
+      - name: (skip) mock.ts pakai installCertificate original (yg bikin Safari trust)
         run: |
-          python3 - <<'PYEOF'
-          p = "appium/api-mocks/mock.ts"
-          s = open(p).read()
-          old = "await driver.execute('mobile: installCertificate', { content: base64 });"
-          assert old in s, "target line not found"
-          # No-op: CA sudah di SYSTEM trust store (simctl keychain add-root-cert).
-          # mobile:installCertificate memicu UI profile iOS ("Profile Downloaded") yang
-          # macet di iOS 26 -> dicabut supaya mockLogin lanjut ke inbox.
-          s = s.replace(old, "/* installCertificate dicabut: CA via simctl keychain */ void base64;")
-          open(p,"w").write(s)
-          print("mock.ts patched: installCertificate dicabut")
-          PYEOF
+          echo "mock.ts tidak dipatch: mobile:installCertificate original dipertahankan."
+          echo "Ini yg bikin SFSafariViewController iOS 26 trust cert mock backend (terbukti run21: splash tanpa TLS warning)."
 
-      - name: Install Appium XCUITest driver
+- name: Install Appium XCUITest driver
         working-directory: appium
         env:
           DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
