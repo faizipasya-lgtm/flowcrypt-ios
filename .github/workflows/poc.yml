@@ -43,9 +43,9 @@ jobs:
             echo "OK: guard TIDAK ada di bundle (sesuai temuan)"
           fi
 
-      - name: Select Xcode 16.4 (SDK iOS 18.5 - cert mock trusted di Safari iOS 18)
+      - name: Select newest Xcode (26.3 - app butuh toolchain ini)
         run: |
-          XCODE_APP=/Applications/Xcode_16.4.app
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
           echo "using $XCODE_APP"
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
@@ -55,11 +55,12 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git config --global --add safe.directory '*'
 
-      - name: Boot simulator (iOS 18.x; cocok dgn SDK Xcode 16.4)
+      - name: Boot simulator (runtime iOS 18.x; SDK26 binary dgn deployment target 15.0 jalan di sini)
         run: |
-          # Pilih device dari runtime iOS 18.x (app dibangun dgn Xcode 16.4 SDK 18.5).
-          # iOS 18 Safari/SFSafariViewController menerima cert mock via installCertificate
-          # (flow default FlowCrypt) -> login mock nembus tanpa drama cert iOS 26.
+          # KUNCI: build pakai Xcode 26.3 (FlowCryptUI compile OK) TAPI run di runtime iOS 18.x.
+          # Deployment target project = 15.0 -> binary SDK26 backward-compatible, jalan di iOS 18.
+          # iOS 18 Profile/trust UI masih bentuk lama -> Appium installCertificate NEMBUS
+          # (di iOS 26 UI berubah -> nyangkut, itu root-cause run2 gagal).
           UDID=$(xcrun simctl list devices available -j | node -e "
             let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
               const j=JSON.parse(d).devices;
@@ -71,8 +72,9 @@ jobs:
                   if (!best || v > bestRt) { best=dev.udid; bestRt=v; }
                 }
               }
-              console.log(best);
+              console.log(best||'');
             });")
+          if [ -z "$UDID" ]; then echo "FATAL: tidak ada device iOS 18.x available"; xcrun simctl list runtimes; exit 1; fi
           echo "UDID terpilih: $UDID"
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
           echo "POC_DEVICE_UDID=$UDID" >> "$GITHUB_ENV"
@@ -82,10 +84,7 @@ jobs:
           xcrun simctl list runtimes | head -8
 
       - name: Build for simulator (ad-hoc signed)
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
-          xcodebuild -version
           xcodebuild -project FlowCrypt.xcodeproj \
             -scheme "Debug FlowCrypt" \
             -configuration Debug \
@@ -113,7 +112,11 @@ jobs:
           APP_PID=$!
           sleep 20
           echo "--- process list (app hidup?) ---"
-          xcrun simctl spawn "$SIM_UDID" launchctl list | grep -i flowcrypt || echo "APP TIDAK ADA di launchctl"
+          if xcrun simctl spawn "$SIM_UDID" launchctl list | grep -i flowcrypt; then
+            echo "APP HIDUP di iOS 18 runtime (SDK26 binary OK)"
+          else
+            echo "WARNING: app tidak di launchctl (bisa jadi sudah exit normal; cek crash reports)"
+          fi
           echo "--- crash reports ---"
           ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | tail -5
           find ~/Library/Logs/DiagnosticReports -name "*FlowCrypt*" -newer /tmp/hit-server.pid 2>/dev/null | head -3
@@ -173,21 +176,31 @@ jobs:
 
       - name: Install Appium XCUITest driver
         working-directory: appium
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
         run: |
           npx appium -v
           npx appium driver install xcuitest 2>&1 | tail -3 || true
           npx appium driver list --installed
           ls -la "$APPIUM_HOME" 2>/dev/null || true
 
-      - name: Prebuild WebDriverAgent (Xcode 16.4)
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Prebuild WebDriverAgent (Xcode 26.3 + stub lib_TestingInterop fallback)
         run: |
           WDA_DIR="$APPIUM_HOME/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent"
           ls "$WDA_DIR/WebDriverAgent.xcodeproj"
-          xcodebuild -version
+          SDK_LIB="/Applications/Xcode_26.3.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/lib_TestingInterop.dylib"
+          if [ ! -f "$SDK_LIB" ]; then
+            sudo mkdir -p "$(dirname "$SDK_LIB")"
+            FOUND=$(find /Applications/Xcode_26.3.app -name "lib_TestingInterop.dylib" 2>/dev/null | head -1 || true)
+            if [ -n "$FOUND" ]; then
+              echo "symlink dari: $FOUND"
+              sudo ln -sf "$FOUND" "$SDK_LIB"
+            else
+              echo "dylib tidak ada di toolchain -> buat stub dylib"
+              echo "int _stub = 0;" > /tmp/stub.c
+              clang -dynamiclib -o /tmp/lib_TestingInterop.dylib /tmp/stub.c
+              sudo cp /tmp/lib_TestingInterop.dylib "$SDK_LIB"
+            fi
+            ls -la "$SDK_LIB"
+          fi
           xcodebuild build-for-testing \
             -project "$WDA_DIR/WebDriverAgent.xcodeproj" \
             -scheme WebDriverAgentRunner \
