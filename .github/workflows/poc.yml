@@ -30,8 +30,10 @@ jobs:
       - name: Restore poc/ + mock-ssl-cert dari ref workflow ini (dihapus oleh checkout pin)
         run: |
           git checkout "$GITHUB_REF" -- poc/
-          git checkout "$GITHUB_REF" -- appium/api-mocks/mock-ssl-cert/ || true
           git checkout "$GITHUB_REF" -- appium/api-mocks/mock.ts || true
+          # mock-ssl-cert TIDAK di-restore dari fork: pakai self-signed cert ASLI vendor
+          # dari commit pin (jalur CI resmi FlowCrypt). Cert CA-chain fork + add-root-cert
+          # bikin dialog "Profile" gak muncul (iOS anggap udah trusted) -> Appium timeout.
           ls -la poc/tools poc/specs
           ls -la appium/api-mocks/mock-ssl-cert/
 
@@ -128,22 +130,6 @@ jobs:
           ls ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3 | xargs -I{} cp {} demo/ 2>/dev/null || true
           echo done-diag
 
-      - name: Trust mock backend cert di SYSTEM store simulator (simctl keychain)
-        run: |
-          # API resmi Apple: masukkan cert mock backend (CN 127.0.0.1:8001) ke SYSTEM
-          # trust store simulator, supaya SFSafariViewController mock-OAuth gak nolak TLS.
-          # Ini CUMA buat mock login backend; host attacker (F1) pakai HTTPS valid publik.
-          CERT=appium/api-mocks/mock-ssl-cert/ca-cert.pem
-          ls -la "$CERT"
-          xcrun simctl keychain "$SIM_UDID" add-root-cert "$CERT" && echo "root cert added to system store" || echo "add-root-cert FAILED"
-          # RESPRING simulator: SafariViewService (proses OAuth) hanya mungut root CA baru
-          # setelah boot ulang. Tanpa ini Safari tetap "This Connection Is Not Private" utk 127.0.0.1.
-          xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
-          xcrun simctl shutdown "$SIM_UDID"
-          xcrun simctl boot "$SIM_UDID"
-          xcrun simctl bootstatus "$SIM_UDID" -b
-          echo "sim respring selesai; root CA aktif utk SafariViewService"
-
       - name: Start attacker host (hit-server, log ke file)
         run: |
           node poc/tools/hit-server.js 8002 > /tmp/hit-server.log 2>&1 &
@@ -173,25 +159,6 @@ jobs:
           cp poc/tools/wdio.poc.conf.ts appium/config/wdio.poc.conf.ts
           mkdir -p appium/tests/specs/mock/poc
           cp poc/specs/poc_attachment_v2.ts appium/tests/specs/mock/poc/poc_attachment.spec.ts
-
-      - name: Patch mock.ts - buang mobile:installCertificate (bentrok dgn system-store cert)
-        run: |
-          # ROOT CAUSE run sebelumnya: mock.ts manggil driver.execute('mobile: installCertificate')
-          # yg drive Settings UI nyari elemen "Profile" -> timeout 5s di iOS 18 (UI tidak muncul
-          # karena CA SUDAH trusted via simctl add-root-cert di SYSTEM store).
-          # Dua mekanisme trust bentrok. System-store (step add-root-cert) sudah cukup utk mock
-          # backend HTTPS (cert.pem.mock CN=127.0.0.1 di-sign FlowCrypt Mock Root CA). Buang UI-drive.
-          MF=appium/api-mocks/mock.ts
-          node -e '
-            const fs=require("fs"); const p=process.argv[1];
-            let s=fs.readFileSync(p,"utf8");
-            s=s.replace(/\n\s*const base64 = readFileSync\('"'"'\.\/api-mocks\/mock-ssl-cert\/cert\.pem\.mock'"'"'\)\.toString\('"'"'base64'"'"'\);/, "");
-            s=s.replace(/\n\s*await driver\.execute\('"'"'mobile: installCertificate'"'"', \{ content: base64 \}\);/, "");
-            fs.writeFileSync(p,s);
-          ' "$MF"
-          echo "--- withMockedApis setelah patch (installCertificate harus hilang) ---"
-          grep -nE "installCertificate|withMockedApis = async|LoggedApi" "$MF" | head
-          grep -q "installCertificate" "$MF" && { echo "FATAL: installCertificate masih ada"; exit 1; } || echo "OK: installCertificate dibuang, andalkan system-store cert"
 
       - name: Install Appium XCUITest driver
         working-directory: appium
